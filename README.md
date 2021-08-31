@@ -10,5 +10,5 @@ The code simulates adaptive learning in two cases:
 1 - "neuromodulation": the Calcium conductance is time-varying
 2 - "mismatch": the internal dynamics is randomly perturbed
 
-HCO: The model was adapted from the upcoming book by Drion, Franci and Sepulchre.
+HCO2: The model was adapted from the upcoming book by Drion, Franci and Sepulchre.
 The code simulates adaptive learning in the perfect case where there is no model mismatch nor time-varying parameters.
