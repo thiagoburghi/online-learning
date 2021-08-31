@@ -1,3 +1,7 @@
+# This model was adapted directly from the model in 
+# "A positive feedback at the cellular level promotes robustness and modulation at the circuit level"
+# By Dethier et al, 2015.
+
 const ENa = 50.     
 const EK = -80.     
 const ECa = 120.
