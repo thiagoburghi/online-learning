@@ -1,5 +1,5 @@
 using Plots: print
-using DifferentialEquations, DiffEqSensitivity, Random, Distributions, Plots, LinearAlgebra, DelimitedFiles
+using DifferentialEquations, Random, Distributions, Plots, LinearAlgebra, DelimitedFiles
 
 # Flag for saving data to .txt files 
 save_data = 0
