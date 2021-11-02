@@ -1,83 +1,73 @@
-# This model was adapted directly from the model in 
-# "A positive feedback at the cellular level promotes robustness and modulation at the circuit level"
-# By Dethier et al, 2015.
-
-const ENa = 50.     
-const EK = -80.     
+const ENa = 50.
+const EK = -80.
 const ECa = 120.
 const EL = -49.
 const ESyn = -80.
 
-gam(v,c,vhalf,sig) = c./(1+exp((v+vhalf)/sig))
-tau(v,c1,c2,vhalf,sig) = c1 + c2/(1+exp((v+vhalf)/sig))
-tau2(v,c,vhalf,sig,c1,c2,vhalf2,sig2) = c/(1+exp((v+vhalf)/sig))*(c1 + c2/(1+exp((v+vhalf2)/sig2)))
+σ(v,r,k) = 1/(1+exp(-(v-r)/k))
+τ(v,c1,c2,r,k) = c1 + c2*σ(v,r,k)
+τ2(v,c,r,k,c1,c2,r2,k2) = c*σ(v,r,k)*τ(v,c1,c2,r2,k2)
 
-### Na-current (m=activation variable, h=inactivation variable)
+### Na-current
 # m activation
-cNa_m = 1;
-vhalfNa_m = 35.5*δ[1,:];
-sigNa_m = -5.29*δ[2,:];
-gamNa_m(V,i) = gam(V,cNa_m,vhalfNa_m[i],sigNa_m[i])
+rNa_m = -35.5;
+kNa_m = 5.29;
+σNa_m(V) = σ(V,rNa_m,kNa_m)
 # m time constant
 c1Na_m = 1.32;
 c2Na_m = -1.26;
-vtauNa_m = 120*δ[3,:];
-sigtauNa_m = -25*δ[4,:];
-tauNa_m(V,i) = tau(V,c1Na_m,c2Na_m,vtauNa_m[i],sigtauNa_m[i])
+rτNa_m = -120;
+kτNa_m = 25;
+τNa_m(V) = τ(V,c1Na_m,c2Na_m,rτNa_m,kτNa_m)
 # h activation
-cNa_h = 1;
-vhalfNa_h = 48.9*δ[5,:];
-sigNa_h = 5.18*δ[6,:];
-gamNa_h(V,i) = gam(V,cNa_h,vhalfNa_h[i],sigNa_h[i])
+rNa_h = -48.9;
+kNa_h = -5.18;
+σNa_h(V) = σ(V,rNa_h,kNa_h)
 # h time constant
-ctauNa_h = 0.67;
-vtauNa_h = 62.9*δ[7,:];
-sigtauNa_h = -10*δ[8,:];
+cτNa_h = 0.67;
+rτNa_h = -62.9;
+kτNa_h = 10;
 c1Na_h = 1.5;
 c2Na_h = 1;
-vtau2Na_h = 34.9*δ[9,:]; 
-sigtau2Na_h = 3.6*δ[10,:];
-tauNa_h(V,i) = tau2(V,ctauNa_h,vtauNa_h[i],sigtauNa_h[i],c1Na_h,c2Na_h,vtau2Na_h[i],sigtau2Na_h[i])
+rτ2Na_h = -34.9; 
+kτ2Na_h = -3.6;
+τNa_h(V) = τ2(V,cτNa_h,rτNa_h,kτNa_h,c1Na_h,c2Na_h,rτ2Na_h,kτ2Na_h)
 
-### K-current (mK=activation variable)
+### K-current
 # mK activation
-cK_m = 1;
-vhalfK_m = 12.3*δ[11,:];
-sigK_m = -11.8*δ[12,:];
-gamK_m(V,i) = gam(V,cK_m,vhalfK_m[i],sigK_m[i])
+rK_m = -12.3;
+kK_m = 11.8;
+σK_m(V) = σ(V,rK_m,kK_m)
 # mK time constant
 c1K_m = 7.2;
 c2K_m = -6.4;
-vtauK_m = 28.3*δ[13,:];
-sigtauK_m = -19.2*δ[14,:];
-tauK_m(V,i) = tau(V,c1K_m,c2K_m,vtauK_m[i],sigtauK_m[i])
+rτK_m = -28.3;
+kτK_m = 19.2;
+τK_m(V) = τ(V,c1K_m,c2K_m,rτK_m,kτK_m)
 
-### Ca-current (mCa=activation variable, hCa = inactivation variable)
+### Ca-current
 # mCa activation
-cCa_m = 1;
-vhalfCa_m = 67.1*δ[15,:];          #dethier: 57.1; follow-up paper: 67.1
-sigCa_m = -7.2*δ[16,:];
-gamCa_m(V,i)= gam(V,cCa_m,vhalfCa_m[i],sigCa_m[i])
+rCa_m = -67.1;          
+kCa_m = 7.2;
+σCa_m(V)= σ(V,rCa_m,kCa_m)
 # mCa time constant
 c1Ca_m = 43.4;
 c2Ca_m = -42.6;
-vtauCa_m = 68.1*δ[17,:];
-sigtauCa_m = -20.5*δ[18,:];
-tauCa_m(V,i) = tau(V,c1Ca_m,c2Ca_m,vtauCa_m[i],sigtauCa_m[i])
+rτCa_m = -68.1;
+kτCa_m = 20.5;
+τCa_m(V) = τ(V,c1Ca_m,c2Ca_m,rτCa_m,kτCa_m)
 # hCa activation
-cCa_h = 1;
-vhalfCa_h = 82.1*δ[19,:];
-sigCa_h = 5.5*δ[20,:];
-gamCa_h(V,i) = gam(V,cCa_h,vhalfCa_h[i],sigCa_h[i])
+rCa_h = -82.1;
+kCa_h = -5.5;
+σCa_h(V) = σ(V,rCa_h,kCa_h)
 # hCa time constant
-c1Ca_h = 140;                                               # dethier: 840 / me 140
-c2Ca_h = -100;                                              # dethier: -718.4 / me -100
-vtauCa_h = 55*δ[21,:];
-sigtauCa_h = -16.9*δ[22,:];
-tauCa_h(V,i) = tau(V,c1Ca_h,c2Ca_h,vtauCa_h[i],sigtauCa_h[i])
+c1Ca_h = 140;
+c2Ca_h = -100;
+rτCa_h = -55;
+kτCa_h = 16.9;
+τCa_h(V) = τ(V,c1Ca_h,c2Ca_h,rτCa_h,kτCa_h)
 
 ### Synaptic current
-cSyn = 1;
-vhalfSyn = 45*δ[23,:];
-sigSyn = -2*δ[24,:];
-gamSyn(V,i) = gam(V,cSyn,vhalfSyn[i],sigSyn[i])
+rSyn = -45;
+kSyn = 2;
+σSyn(V) = σ(V,rSyn,kSyn)

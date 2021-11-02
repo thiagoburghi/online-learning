@@ -2,7 +2,7 @@ using Plots: print
 using DifferentialEquations, Random, Plots, LinearAlgebra, DelimitedFiles
 
 # Flag for saving data to .txt files 
-save_data = false
+save_data = 0
 
 # No internal dynamics perturbation
 δ = ones(46,4)
@@ -27,15 +27,15 @@ C1 = C2 = 1.0
 (gSyn1,gSyn2) = (4,4)                   # Synaptic maximal conductance
 
 # Calcium current maximal conductance
-gCa0 = 0.1
-gCaf = 0.16
+gCa0 = 0.1;
+gCaf = 0.16;
 sig = x -> 1 ./ (1+exp(-x));
-gCa = t -> gCa0 .+ (gCaf-gCa0)*sig((t-Tfinal/2)/1250);#750
+gCa = t -> gCa0 .+ (gCaf-gCa0)*sig((t-Tfinal/2)/750);
 (gCa1,gCa2) = (t -> gCa.(t), t -> gCa.(t))     
 
 # Synaptic parameters
-a1 = a2 = 2;        
-b1 = b2 = 0.1;
+kfA1 = kfA2 = 2;        
+krA1 = krA2 = 0.1;
 
 # Observer parameters
 α₁ = 0.01
@@ -43,30 +43,12 @@ b1 = b2 = 0.1;
 γ = 10.
 β = γ
 
-# True system initial conditions (chosen from steady
-# state oscillations with gCa = 0.1)
-V0 =  [ -62.66091038531592
-        -70.44894441288831
-        ]
-w₀ =  [ 0.0058621887308486515
-        0.001344578028506826
-        0.9340962269868666
-        0.984775915082517
-        0.014066710466720091
-        0.0068454789625906455
-        0.6713459367621024
-        0.3257086515030068
-        0.025756012084214033
-        0.19423394334660857
-        4.0971753762831785e-5
-        0.0035516641693319776
-        ]
-x0 = [V0;w₀]
-# V01= -64
-# V02= -66.
-# x01 = [V01 0.5*ones(1,6)]   #gamNa_m(V01,1) gamNa_h(V01,1) gamK_m(V01,1) gamCa_m(V01,1) gamCa_h(V01,1) gamSyn(V01,1)]
-# x02 = [V02 0.5*ones(1,6)]   #gamNa_m(V02,2) gamNa_h(V02,2) gamK_m(V02,2) gamCa_m(V02,2) gamCa_h(V02,2) gamSyn(V02,2)]
-# x0 = reshape([x01;x02],1,14)'
+# True system initial conditions
+V01= -64
+V02= -66.
+x01 = [V01 0.5*ones(1,6)]   #gamNa_m(V01,1) gamNa_h(V01,1) gamK_m(V01,1) gamCa_m(V01,1) gamCa_h(V01,1) gamSyn(V01,1)]
+x02 = [V02 0.5*ones(1,6)]   #gamNa_m(V02,2) gamNa_h(V02,2) gamK_m(V02,2) gamCa_m(V02,2) gamCa_h(V02,2) gamSyn(V02,2)]
+x0 = reshape([x01;x02],1,14)'
 # Observer initial conditions
 x̂01 = [-50. zeros(1,6)]
 x̂02 = [-50. zeros(1,6)]
@@ -83,18 +65,13 @@ z0 = [x0;x̂0;θ₀;reshape(P0[1],25,1);reshape(P0[2],25,1);ψ₀]
 
 ## ESTIMATE BOTH TRUE SYSTEM AND OBSERVER
 p = ((Iapp1,Iapp2),(C1,C2),(gNa1,gNa2),(gK1,gK2),(gCa1,gCa2),(gL1,gL2),(gSyn1,gSyn2),
-    (a1,a2),(b1,b2),(α₁,α₂,β,γ))
+    (kfA1,kfA2),(krA1,krA2),(α₁,α₂,β,γ))
 
 prob = ODEProblem(HCO_observer_ode,z0,tspan,p)
-sol = solve(prob,Tsit5(),saveat=0.1,reltol=1e-5,abstol=1e-5) #,reltol=1e-6,abstol=1e-6,AutoTsit5(Rosenbrock23()),Tsit5()
+sol = solve(prob,Rosenbrock23(autodiff=false),saveat=0.1,maxiters=1e6) #,reltol=1e-6,abstol=1e-6,AutoTsit5(Rosenbrock23()),Tsit5()
 v = sol[1:2,1,:]';
-w = sol[3:14,1,:]';
-v₀ = v[end,:] 
-w₀ = w[end,:] 
 v̂ = sol[15:16,1,:]';
 θ = sol[29:38,1,:]';
-
-## PLOTS
 
 # VOLTAGES
 p1=plot(sol.t, v[:,1],linewidth=1.5,legend=false)
@@ -103,31 +80,31 @@ voltages = plot(p1,p2,layout=(2,1),legend=false)
 
 # Na CONDUCTANCES 
 plt1 = plot(sol.t,θ[:,1:2],labels=["ĝNa₁" "ĝNa₂"],linecolor=["red" "blue"])
-plt1 = plot!([0,Tfinal],[gNa1,gNa1],linecolor="red",linestyle= :dash,labels="gNa₁")
-plt1 = plot!([0,Tfinal],[gNa2,gNa2],linecolor="blue",linestyle= :dash,labels="gNa₂")
+plt1 = plot!([0,Tfinal],[gNa1,gNa1],linecolor=["red"],linestyle= :dash,labels="gNa₁")
+plt1 = plot!([0,Tfinal],[gNa2,gNa2],linecolor=["blue"],linestyle= :dash,labels="gNa₂")
 
 # K CONDUCTANCES 
 plt2 = plot(sol.t,θ[:,3:4],labels=["ĝK₁" "ĝK₂"],linecolor=["red" "blue"]) 
-plt2 = plot!([0,Tfinal],[gK1,gK1],linecolor="red",linestyle= :dash,labels="gK₁")
-plt2 = plot!([0,Tfinal],[gK2,gK2],linecolor="blue",linestyle= :dash,labels="gK₂")
+plt2 = plot!([0,Tfinal],[gK1,gK1],linecolor=["red"],linestyle= :dash,labels="gK₁")
+plt2 = plot!([0,Tfinal],[gK2,gK2],linecolor=["blue"],linestyle= :dash,labels="gK₂")
 
 # Ca CONDUCTANCES 
 plt3 = plot(sol.t,θ[:,5:6],labels=["ĝCa₁" "ĝCa₂"],linecolor=["red" "blue"])
-plt3 = plot!(sol.t,[gCa1(sol.t)],linecolor="red",linestyle= :dash,labels="gCa₁")
-plt3 = plot!(sol.t,[gCa2(sol.t)],linecolor="blue",linestyle= :dash,labels="gCa₂")
+plt3 = plot!(sol.t,[gCa1(sol.t)],linecolor=["red"],linestyle= :dash,labels="gCa₁")
+plt3 = plot!(sol.t,[gCa2(sol.t)],linecolor=["blue"],linestyle= :dash,labels="gCa₂")
 ylims!((-0.1,0.2))
 
 # Leak CONDUCTANCES
 plt4 = plot(sol.t,θ[:,7:8],labels=["ĝL₁" "ĝL₂"],linecolor=["red" "blue"]) 
-plt4 = plot!([0,Tfinal],[gL1,gL1],linecolor="red",linestyle= :dash,labels="gL₁")
-plt4 = plot!([0,Tfinal],[gL2,gL2],linecolor="blue",linestyle= :dash,labels="gL₂")
+plt4 = plot!([0,Tfinal],[gL1,gL1],linecolor=["red"],linestyle= :dash,labels="gL₁")
+plt4 = plot!([0,Tfinal],[gL2,gL2],linecolor=["blue"],linestyle= :dash,labels="gL₂")
 
 # # SYNAPTIC CONDUCTANCES
 plt5 = plot(sol.t,θ[:,9:10],labels=["ĝSyn₁" "ĝSyn₂"],linecolor=["red" "blue"])
-plt5 = plot!([0,Tfinal],[gSyn1,gSyn1],linecolor="red",linestyle= :dash,labels="gSyn₁")
-plt5 = plot!([0,Tfinal],[gSyn2,gSyn2],linecolor="blue",linestyle= :dash,labels="gSyn₂")
+plt5 = plot!([0,Tfinal],[gSyn1,gSyn1],linecolor=["red"],linestyle= :dash,labels="gSyn₁")
+plt5 = plot!([0,Tfinal],[gSyn2,gSyn2],linecolor=["blue"],linestyle= :dash,labels="gSyn₂")
 
-if save_data
+if save_data == 1
     writedlm("./../data/HCO_truevoltages_neuromodulation.txt",  hcat(sol.t,v), " ")
     writedlm("./../data/HCO_parameters_neuromodulation.txt",  hcat(sol.t,θ,gCa.(sol.t)), " ")
 end

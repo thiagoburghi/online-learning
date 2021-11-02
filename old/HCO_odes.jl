@@ -1,3 +1,52 @@
+# The HCO model was adapted directly from the model in 
+# "A positive feedback at the cellular level promotes robustness and modulation at the circuit level"
+# By Dethier et al, 2015.
+
+function HCO_ode(du,u,p,t)
+    Iapp=p[1] 
+    C = p[2]
+    gNa = p[3]
+    gK = p[4]
+    gCa = p[5]
+    gL = p[6]
+    gSyn = p[7]
+    kfA = p[8]
+    krA = p[9]
+    type = p[10]
+    
+    V = u[1:2]
+    mNa = u[3:4]
+    hNa = u[5:6]
+    mK = u[7:8]
+    mCa = u[9:10]
+    hCa = u[11:12]
+    mSyn = u[13:14]
+
+    # Choose true model or adaptive observer internal dynamics
+    if type == "nominal"
+        addind = 0
+    else
+        addind = 2
+    end
+
+    # TRUE SYSTEM
+    for n = 1:2
+        p = n + addind
+        du[0+n]=1/C[n]*(- gNa[n]*mNa[n]^3*hNa[n]*(V[n]-ENa) + 
+                        - gK[n]*mK[n]^4*(V[n]-EK) +
+                        - gCa[n](t)*mCa[n]^3*hCa[n]*(V[n]-ECa) +
+                        - gL[n]*(V[n]-EL) +  
+                        - gSyn[n]*mSyn[n]*(V[n]-ESyn) +
+                        + Iapp[n](t)  )
+        du[2+n]=(-mNa[n]+gamNa_m(V[n],p))*1/tauNa_m(V[n],p)
+        du[4+n]=(-hNa[n]+gamNa_h(V[n],p))*1/tauNa_h(V[n],p)
+        du[6+n]=(-mK[n]+gamK_m(V[n],p))*1/tauK_m(V[n],p)
+        du[8+n]=(-mCa[n]+gamCa_m(V[n],p))*1/tauCa_m(V[n],p)
+        du[10+n]=(-hCa[n]+gamCa_h(V[n],p))*1/tauCa_h(V[n],p)
+        du[12+n] = kfA[n]*gamSyn(V[mod(2*n,3)],p)*(1-mSyn[n])-krA[n]*mSyn[n] 
+    end
+end
+
 function HCO_observer_ode(du,u,p,t)
     Iapp=p[1] 
     C = p[2]
@@ -6,8 +55,8 @@ function HCO_observer_ode(du,u,p,t)
     gCa = p[5]
     gL = p[6]
     gSyn = p[7]
-    a = p[8]
-    b = p[9]
+    kfA = p[8]
+    krA = p[9]
     α₁,α₂,β,γ = p[10]
 
     V = u[1:2];          V̂ = u[15:16]
@@ -36,12 +85,12 @@ function HCO_observer_ode(du,u,p,t)
                         - gL[n]*(V[n]-EL) +  
                         - gSyn[n]*mSyn[n]*(V[n]-ESyn) +
                         + Iapp[n](t)  )
-        du[2+n]=(-mNa[n]+σNa_m(V[n]))*1/τNa_m(V[n])
-        du[4+n]=(-hNa[n]+σNa_h(V[n]))*1/τNa_h(V[n])
-        du[6+n]=(-mK[n]+σK_m(V[n]))*1/τK_m(V[n])
-        du[8+n]=(-mCa[n]+σCa_m(V[n]))*1/τCa_m(V[n])
-        du[10+n]=(-hCa[n]+σCa_h(V[n]))*1/τCa_h(V[n])
-        du[12+n] = a[n]*σSyn(V[mod(2*n,3)])*(1-mSyn[n])-b[n]*mSyn[n] 
+        du[2+n]=(-mNa[n]+gamNa_m(V[n],n))*1/tauNa_m(V[n],n)
+        du[4+n]=(-hNa[n]+gamNa_h(V[n],n))*1/tauNa_h(V[n],n)
+        du[6+n]=(-mK[n]+gamK_m(V[n],n))*1/tauK_m(V[n],n)
+        du[8+n]=(-mCa[n]+gamCa_m(V[n],n))*1/tauCa_m(V[n],n)
+        du[10+n]=(-hCa[n]+gamCa_h(V[n],n))*1/tauCa_h(V[n],n)
+        du[12+n] = kfA[n]*gamSyn(V[mod(2*n,3)],n)*(1-mSyn[n])-krA[n]*mSyn[n] 
     end
 
     # OBSERVER
@@ -50,6 +99,7 @@ function HCO_observer_ode(du,u,p,t)
     dP = zeros(5,5,2)
 
     for n = 1:2
+        p = n+2
         du[14+n]=1/C[n]*(- ĝNa[n]*m̂Na[n]^3*ĥNa[n]*(V[n]-ENa) + 
                          - ĝK[n]*m̂K[n]^4*(V[n]-EK) +
                          - ĝCa[n]*m̂Ca[n]^3*ĥCa[n]*(V[n]-ECa) +
@@ -58,12 +108,12 @@ function HCO_observer_ode(du,u,p,t)
                          + Iapp[n](t)) + 
                          + γ*(V[n]-V̂[n]) +
                          + β*ψ[n,:]'*P[n]*ψ[n,:]*(V[n]-V̂[n])
-        du[16+n]=(-m̂Na[n]+σNa_m(V[n]))*1/τNa_m(V[n])
-        du[18+n]=(-ĥNa[n]+σNa_h(V[n]))*1/τNa_h(V[n])
-        du[20+n]=(-m̂K[n]+σK_m(V[n]))*1/τK_m(V[n])
-        du[22+n]=(-m̂Ca[n]+σCa_m(V[n]))*1/τCa_m(V[n])
-        du[24+n]=(-ĥCa[n]+σCa_h(V[n]))*1/τCa_h(V[n])
-        du[26+n] = a[n]*σSyn(V[mod(2*n,3)])*(1-m̂Syn[n])-b[n]*m̂Syn[n] 
+        du[16+n]=(-m̂Na[n]+gamNa_m(V[n],p))*1/tauNa_m(V[n],p)
+        du[18+n]=(-ĥNa[n]+gamNa_h(V[n],p))*1/tauNa_h(V[n],p)
+        du[20+n]=(-m̂K[n]+gamK_m(V[n],p))*1/tauK_m(V[n],p)
+        du[22+n]=(-m̂Ca[n]+gamCa_m(V[n],p))*1/tauCa_m(V[n],p)
+        du[24+n]=(-ĥCa[n]+gamCa_h(V[n],p))*1/tauCa_h(V[n],p)
+        du[26+n] = kfA[n]*gamSyn(V[mod(2*n,3)],p)*(1-m̂Syn[n])-krA[n]*m̂Syn[n] 
 
         ϕ = -1/C[n]*[m̂Na[n]^3*ĥNa[n]*(V[n]-ENa),
                      m̂K[n]^4*(V[n]-EK),
