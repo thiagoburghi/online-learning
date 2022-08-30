@@ -1,80 +1,119 @@
 using Plots: print
-using DifferentialEquations, Random, Distributions, Plots, LinearAlgebra, DelimitedFiles
+using DifferentialEquations, Random, Plots, LinearAlgebra, DelimitedFiles
+import Statistics: mean
 
 # Flag for saving data to .txt files 
 save_data = false
+outinj = true
 
 include("HH_odes.jl")
 
 # True Parameters 
 c = 1.
-g = (120.,36.,0.3)
+μ = [120.,36.,0.3]
+θ = [μ[1]/c,μ[2]/c,μ[3]/c,1/c]
+η = [-40,-62,-53]
 E = (55.,-77.,-54.4)
-Iapp = t -> 2 + sin(2*pi/10*t)
+Iapp = t -> 10 + sin(2*pi/10*t)
+k = (9.0,-7.0,15.0)
 
 # Observer parameters
-α = 0.5
-γ = 5.0
+α,γ,β = 0.1, 1.0, 1.0
+#α,γ,β = 0.0001, 0.1, 1.0
+
+# Integration parameters
+dt_plot = 0.1 
+dt_sim = 0.001
+#Tfinal = 300.
+Tfinal = 300.
+tspan = (0.,Tfinal)
+
+# Noise parameters
+σnoise = 0 #0.05
 
 # Initial conditions
-x₀ = [0 0 0 0]; 
-x̂₀ = [-60 0.5 0.5 0.5];
-θ̂₀ = [60 60 10 0 0 0 0];
+x₀ = [-30 0.5 0.5 0.5];
+x̂₀ = [-30 0.0 0.0 0.0];
+θ̂₀ = [78 78 10 2];
+η̂₀ = [-20 -20 -20];
 P₀ = Matrix(I, 7, 7);
-Ψ₀ = [0 0 0 0 0 0 0];
+ψ₁₀ = [0 0 0 0 0 0 0];
+ψ₂₀ = [0 0 0];
+z₀ = [x₀ x̂₀ θ̂₀ η̂₀ reshape(P₀,1,49) ψ₁₀ ψ₂₀]
 
-# Integration initial conditions and parameters
-dt = 0.01
-Tfinal = 100.
-tspan = (0.,Tfinal)
-z₀ = [x₀ x̂₀ θ̂₀ reshape(P₀,1,49) Ψ₀]
-p = (Iapp,c,g,E,(α,γ))
+# System parameters
+p = (Iapp,θ,η,E,(α,β,γ),k,(σnoise,dt_sim),outinj)
 
-# Integrate
-prob = ODEProblem(HH_observer!,z₀,tspan,p)
-sol = solve(prob,Tsit5(),reltol=1e-8,abstol=1e-8,saveat=0.1,maxiters=1e6)
+# Solve SDE problem (includes measurement noise)
+# Important: Wₜ in the SDE is a Wiener process such that 
+# Wₜ - Wₛ ∼ zero mean gaussian white noise with σ² = t-s
+# When solving with Euler-Maruyama, dWₜ is approximated by ΔWₜ, which is 
+# discrete-time zero-mean gaussian white noise with σ² = dt_sim
+prob = SDEProblem(f_SDE!,g_SDE!,[z₀ 0],tspan,p)
+sol = solve(prob,EM(),dt=dt_sim,saveat=dt_plot)
+noise = sol[1,end,:]
+
+# Solve ODE problem (no measurement noise)
+# prob = ODEProblem(HH_ODE!,z₀,tspan,p)
+# sol = solve(prob,Tsit5(),reltol=1e-6,abstol=1e-6,saveat=0.1,maxiters=1e5)
+
+# Recover individual states
 t = sol.t
 v = sol[1,1,:];
 w = sol[1,2:4,:];
 v̂ = sol[1,5,:];
 ŵ = sol[1,6:8,:];
-θ̂ = sol[1,9:15,:];
-N = 15+49+7;
+θ̂ = sol[1,9:12,:];
+η̂ = sol[1,13:15,:];
+p = sol[1,15+1:15+49,:];
+ψ₁ = sol[1,15+49+1:15+49+7,:];
+ψ₂ = sol[1,15+49+7+1:15+49+7+3,:]
+
+Vpower = 1/Tfinal*sum((v .- mean(v)).^2)*dt_plot
+noisepower = 1/Tfinal*sum(noise.^2)*dt_plot
+SNR = 10*log10(Vpower/noisepower)
 
 if save_data
-    writedlm("./../data/HH_voltages.txt",  hcat(t,v,v̂), " ")
-    writedlm("./../data/HH_parameters.txt",  hcat(t,θ̂'), " ")
+    writedlm(string("./../data/HH_voltages_a=",α,"_g=",γ,"_s=",σnoise,"_oi=",outinj,".txt"),  hcat(t[1:100:end],v[1:100:end],v̂[1:100:end]), " ")
+    writedlm(string("./../data/HH_parameters_a=",α,"_g=",γ,"_s=",σnoise,"_oi=",outinj,".txt"),  hcat(t[1:100:end],θ̂[:,1:100:end]',η̂[:,1:100:end]'), " ")
 end
 
 ## Plots
-
-plt0 = plot(t,v)
-plt0 = plot!(t,v̂,linecolor="red",linestyle= :dash)
+# pltv = plot(t,v)
+# pltv = plot!(t,v̂,linecolor="red",linestyle= :dash)
+# pltd = plot(t,permutedims(ŵ))
+# pltd = plot(t,noise)
+# pltP = plot(t,permutedims(p))
 
 # gNa/c
-plt1 = plot([0,Tfinal],[g[1]/c,g[1]/c],linecolor="black",linestyle=:dash,labels="gNa/c")
+plt1 = plot([0,Tfinal],[θ[1],θ[1]],linecolor="black",linestyle=:dash,labels="gNa/c")
 plt1 = plot!(t,θ̂[1,:],linecolor="red")
 
 # gK/c
-plt2 = plot([0,Tfinal],[g[2]/c,g[2]/c],linecolor="black",linestyle=:dash,labels="gK/c")
+plt2 = plot([0,Tfinal],[θ[2],θ[2]],linecolor="black",linestyle=:dash,labels="gK/c")
 plt2 = plot!(t,θ̂[2,:],linecolor="red")
 
 # gL/c
-plt3 = plot([0,Tfinal],[g[3]/c,g[3]/c],linecolor="black",linestyle=:dash,labels="gL/c")
+plt3 = plot([0,Tfinal],[θ[3],θ[3]],linecolor="black",linestyle=:dash,labels="gL/c")
 plt3 = plot!(t,θ̂[3,:],linecolor="red")
 
-# gNa*ENa/c
-plt4 = plot([0,Tfinal],[g[1]*E[1]/c,g[1]*E[1]/c],linecolor="black",linestyle=:dash,labels="gNa*ENa/c")
-plt4 = plot!(t,θ̂[4,:],linecolor="red")
+plot(plt1,plt2,plt3,layout=(3,1))
 
-# gK*EK/c
-plt5 = plot([0,Tfinal],[g[2]*E[2]/c,g[2]*E[2]/c],linecolor="black",linestyle=:dash,labels="gK*EK/c")
-plt5 = plot!(t,θ̂[5,:],linecolor="red")
+## 1/c
+plt8 = plot([0,Tfinal],[θ[4],θ[4]],linecolor="black",linestyle=:dash,labels="1/c")
+plt8 = plot!(t,θ̂[4,:],linecolor="red")
 
-# gL*EL/c
-plt6 = plot([0,Tfinal],[g[3]*E[3]/c,g[3]*E[3]/c],linecolor="black",linestyle=:dash,labels="gL*EL/c")
-plt6 = plot!(t,θ̂[6,:],linecolor="red")
+### INTERNAL 
+# 1 (m)
+plt8 = plot([0,Tfinal],[η[1],η[1]],linecolor="black",linestyle=:dash,labels="vh_m")
+plt8 = plot!(t,η̂[1,:],linecolor="red")
 
-# 1/c
-plt7 = plot([0,Tfinal],[1/c,1/c],linecolor="black",linestyle=:dash,labels="1/c")
-plt7 = plot!(t,θ̂[7,:],linecolor="red")
+# 1 (h)
+plt9 = plot([0,Tfinal],[η[2],η[2]],linecolor="black",linestyle=:dash,labels="vh_h")
+plt9 = plot!(t,η̂[2,:],linecolor="red")
+
+# 1 (n)
+plt10 = plot([0,Tfinal],[η[3],η[3]],linecolor="black",linestyle=:dash,labels="vh_n")
+plt10 = plot!(t,η̂[3,:],linecolor="red")
+
+plot(plt8,plt9,plt10,layout=(3,1))
